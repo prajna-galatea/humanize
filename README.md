@@ -155,6 +155,15 @@ If seconds are too large, set `minimum_unit` to milliseconds or microseconds:
 
 ### File size humanization
 
+Use `precision` to set decimal places for scaled units, overriding `format`.
+Bytes remain integers (for example, `naturalsize(300, precision=2)` is
+`300 Bytes`); invalid precision values raise `TypeError` or `ValueError`.
+
+```python
+humanize.naturalsize(3000, precision=2)  # "3.00 kB"
+humanize.naturalsize(3000, gnu=True, precision=3)  # "2.930K"
+```
+
 ```pycon
 >>> import humanize
 >>> humanize.naturalsize(1_000_000)

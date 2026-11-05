@@ -101,3 +101,96 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) -> 
         test_args[0] = f"-{test_args[0]}"
 
     assert humanize.naturalsize(*test_args) == "-" + expected
+
+
+@pytest.mark.parametrize(
+    "binary, gnu, expected",
+    [
+        (False, False, ["2 kB", "1.5 kB", "1.54 kB", "1.536 kB", "1.536000 kB"]),
+        (True, False, ["2 KiB", "1.5 KiB", "1.50 KiB", "1.500 KiB", "1.500000 KiB"]),
+        (False, True, ["2K", "1.5K", "1.50K", "1.500K", "1.500000K"]),
+        (True, True, ["2K", "1.5K", "1.50K", "1.500K", "1.500000K"]),
+    ],
+)
+@pytest.mark.parametrize("precision, index", [(0, 0), (1, 1), (2, 2), (3, 3), (6, 4)])
+def test_precision_matrix(binary, gnu, expected, precision, index):
+    assert humanize.naturalsize(1536, binary, gnu, precision=precision) == expected[index]
+    assert humanize.naturalsize(-1536, binary, gnu, precision=precision) == "-" + expected[index]
+
+
+@pytest.mark.parametrize("fmt", ["%.0f", "invalid"])
+def test_precision_overrides_format(fmt):
+    assert humanize.naturalsize(3000, format=fmt, precision=2) == "3.00 kB"
+
+
+def test_precision_none_and_positional_compatibility():
+    assert humanize.naturalsize(3000, False, True, "%.3f", precision=None) == "2.930K"
+    with pytest.raises(TypeError):
+        humanize.naturalsize(3000, False, True, "%.3f", 2)
+
+
+@pytest.mark.parametrize("binary, gnu, base", [(False, False, 1000), (True, False, 1024), (False, True, 1024)])
+@pytest.mark.parametrize("value", [0, 0.5, -0.5, 1, -1, 300, -300, "below_base"])
+def test_precision_bytes_compatibility(binary, gnu, base, value):
+    if value == "below_base":
+        value = base - 1
+    assert humanize.naturalsize(value, binary, gnu, precision=2) == humanize.naturalsize(value, binary, gnu)
+
+
+@pytest.mark.parametrize("binary, gnu, value, expected", [
+    (False, False, 1000, "1.00 kB"), (True, False, 1024, "1.00 KiB"),
+    (False, True, 1024, "1.00K"), (False, False, 999999, "1.00 MB"),
+    (True, False, 1024**2 - 1, "1.00 MiB"), (False, True, 1024**2 - 1, "1.00M"),
+    (False, False, 10**34 * 3, "30000.00 QB"),
+    (True, False, 1024**10 * 3, "3.00 QiB"), (False, True, 1024**10 * 3, "3.00Q"),
+])
+def test_precision_symmetric_boundaries(binary, gnu, value, expected):
+    assert humanize.naturalsize(value, binary, gnu, precision=2) == expected
+    assert humanize.naturalsize(-value, binary, gnu, precision=2) == "-" + expected
+
+
+@pytest.mark.parametrize("binary, gnu, value, expected", [
+    (False, False, 999999, "999.999 kB"),
+    (True, False, 1024**2 - 1, "1023.999 KiB"),
+    (False, True, 1024**2 - 1, "1023.999K"),
+])
+def test_precision_carry_boundary(binary, gnu, value, expected):
+    assert humanize.naturalsize(value, binary, gnu, precision=3) == expected
+    assert humanize.naturalsize(-value, binary, gnu, precision=3) == "-" + expected
+
+
+@pytest.mark.parametrize("binary, gnu, value, expected", [
+    (False, False, 3000, "3.0 kB"), (True, False, 3000.0, "2.9 KiB"),
+    (False, True, "3000", "2.9K"), (False, False, 1, "1 Byte"),
+])
+def test_existing_negative_symmetry(binary, gnu, value, expected):
+    assert humanize.naturalsize(value, binary, gnu) == expected
+    assert humanize.naturalsize(f"-{value}", binary, gnu) == "-" + expected
+
+
+@pytest.mark.parametrize("binary, gnu, expected", [(False, False, "3.000 kB"), (True, False, "2.930 KiB"), (False, True, "2.930K")])
+def test_custom_format_symmetry(binary, gnu, expected):
+    assert humanize.naturalsize(3000, binary, gnu, "%.3f") == expected
+    assert humanize.naturalsize(-3000, binary, gnu, "%.3f") == "-" + expected
+
+
+@pytest.mark.parametrize("binary, gnu", [(False, False), (True, False), (False, True)])
+@pytest.mark.parametrize("value", [1, 3000])
+@pytest.mark.parametrize("precision, error", [(-1, ValueError), (-3, ValueError), (True, TypeError), (False, TypeError), (2.0, TypeError), (-1.0, TypeError), (float('nan'), TypeError), (float('inf'), TypeError), ("2", TypeError)])
+def test_invalid_precision(binary, gnu, value, precision, error):
+    with pytest.raises(error):
+        humanize.naturalsize(value, binary, gnu, precision=precision)
+
+
+def test_existing_out_of_scope_formats():
+    assert humanize.naturalsize(0.5) == humanize.naturalsize(-0.5) == "0 Bytes"
+    assert humanize.naturalsize(0.5, gnu=True) == humanize.naturalsize(-0.5, gnu=True) == "0B"
+    assert humanize.naturalsize(3000, gnu=True, format="%+.1f") == "+2.9K"
+    assert humanize.naturalsize(-3000, gnu=True, format="%+.1f") == "-2.9K"
+
+
+def test_precision_accepts_int_subclass():
+    class Precision(int):
+        pass
+
+    assert humanize.naturalsize(3000, precision=Precision(2)) == "3.00 kB"
