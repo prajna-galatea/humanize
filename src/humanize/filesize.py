@@ -40,6 +40,8 @@ def naturalsize(
     binary: bool = False,
     gnu: bool = False,
     format: str = "%.1f",
+    *,
+    precision: int | None = None,
 ) -> str:
     """Format a number of bytes like a human-readable filesize (e.g. 10 kB).
 
@@ -74,11 +76,20 @@ def naturalsize(
             2<sup>10</sup> instead of 10<sup>3</sup>.
         gnu (bool): If `True`, the binary argument is ignored and GNU-style
             (`ls -sh` style) prefixes are used (K, M) with the 2**10 definition.
-        format (str): Custom formatter.
+        format (str): Custom formatter, overridden by `precision` when provided.
+        precision (int | None): Decimal places for scaled units. Bytes remain
+            integers. Must be a non-negative integer.
 
     Returns:
         str: Human readable representation of a filesize.
     """
+    if precision is not None:
+        if isinstance(precision, bool) or not isinstance(precision, int):
+            raise TypeError("precision must be an integer")
+        if precision < 0:
+            raise ValueError("precision must be non-negative")
+        format = f"%.{precision}f"
+
     if gnu:
         suffix = suffixes["gnu"]
     elif binary:
