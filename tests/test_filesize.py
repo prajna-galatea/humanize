@@ -129,12 +129,19 @@ def test_precision_none_and_positional_compatibility():
         humanize.naturalsize(3000, False, True, "%.3f", 2)
 
 
-@pytest.mark.parametrize("binary, gnu, base", [(False, False, 1000), (True, False, 1024), (False, True, 1024)])
-@pytest.mark.parametrize("value", [0, 0.5, -0.5, 1, -1, 300, -300, "below_base"])
-def test_precision_bytes_compatibility(binary, gnu, base, value):
+@pytest.mark.parametrize("binary, gnu, below_base", [(False, False, 999), (True, False, 1023), (False, True, 1023)])
+@pytest.mark.parametrize("value, expected, gnu_expected", [
+    (0, "0 Bytes", "0B"), (0.5, "0 Bytes", "0B"), (-0.5, "0 Bytes", "0B"),
+    (1, "1 Byte", "1B"), (-1, "-1 Byte", "-1B"),
+    (300, "300 Bytes", "300B"), (-300, "-300 Bytes", "-300B"),
+    ("below_base", None, None),
+])
+def test_precision_bytes_compatibility(binary, gnu, below_base, value, expected, gnu_expected):
     if value == "below_base":
-        value = base - 1
-    assert humanize.naturalsize(value, binary, gnu, precision=2) == humanize.naturalsize(value, binary, gnu)
+        value = below_base
+        expected = "999 Bytes" if below_base == 999 else "1023 Bytes"
+        gnu_expected = "1023B"
+    assert humanize.naturalsize(value, binary, gnu, precision=2) == (gnu_expected if gnu else expected)
 
 
 @pytest.mark.parametrize("binary, gnu, value, expected", [
